@@ -1,6 +1,7 @@
 //XXX: TODO: Add Lower Power Ability to wake up by button:
 // https://learn.sparkfun.com/tutorials/reducing-arduino-power-consumption/all
 // http://www.home-automation-community.com/arduino-low-power-how-to-run-atmega328p-for-a-year-on-coin-cell-battery/
+// https://circuitdigest.com/microcontroller-projects/arduino-sleep-modes-and-how-to-use-them-to-reduce-power-consumption
 
 //XXX: TODO: Add Solar abilities
 
@@ -16,6 +17,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <DHT.h>
+#include <LowPower.h>
 
 #define LCD_I2C_ADDRESS 0x27
 LiquidCrystal_I2C lcd( LCD_I2C_ADDRESS, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
@@ -28,40 +30,38 @@ const int analogInPin = A0;  // Analog input pin that the TMP36-1 sensor is atta
 int sensorValue       = 0;   
 double temp           = 0;
 
-
+#define MOISTURE_MIN  20
 const int analogMsPin = A2;  // Analog input pin that the DHT11 sensor is attached to
 int moistureVal       = 0;
 double miosture       = 0;
 
-void setup() {
+int counter           = 0; //Sleep Counter
+
+void setup( void ) 
+{
   // put your setup code here, to run once:
 
   pinMode( LED_BUILTIN, OUTPUT );     // initialize digital pin LED_BUILTIN = 13 as an output.
+  
+#ifdef DEBUG
   Serial.begin( 9600 );              // initialize serial communications at 9600 bps:
+#endif
 
   dht.begin();
-  
-  lcd.begin(16, 2);
+
+  /* Set the LCD to a 20 chars and 4 line display */
+  lcd.begin(20, 4);
+  lcd.clear();
   /* Set cursor to position 0, 0 */ 
   lcd.home ();
-  lcd.print("hello, world!");
+  lcd.print("Hello, World LG!");
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
-
-  digitalWrite( LED_BUILTIN, HIGH );   
-  delay( 1000 );
-  digitalWrite(LED_BUILTIN, LOW); 
-
-  /* Set cursor to position column 0, line 1 */ 
-  /* (note: line 1 is the second row, since counting begins with 0) */
-  lcd.setCursor(0, 1);
-
-  /* ***************************************  */
-  /*              TMP36-1 Sensor              */
-  /* ***************************************  */
-
+/* ***********************************************************************  */
+/*                              TMP36-1 Sensor                              */
+/* ***********************************************************************  */
+void tmp_sensor( void )
+{
   sensorValue = analogRead( analogInPin );  // Read the analog in value
 
   /* 
@@ -82,23 +82,30 @@ void loop() {
    
   temp = temp - 0.5;                      
   temp = temp * 100;                     
-  
+
+#ifdef DEBUG
   Serial.print( "Analog value (mV) = " );   
   Serial.print( sensorValue );
 
   Serial.print( " - temp (C) = " );   
   Serial.println( temp );
+#endif
 
   // print the number of seconds since reset:
   //lcd.print(millis() / 1000);
+
+  /* Set cursor to position column 0, line 1 */ 
+  /* (note: line 1 is the second row, since counting begins with 0) */
+  lcd.setCursor( 0, 1 );
   lcd.print("Temp (C) = ");
   lcd.print(temp);
+}
 
-  /* ***************************************  */
-  /*                DHT11 Sensor              */
-  /* ***************************************  */
-  delay( 2000 ); /*  DHT11 Sensor needs 2 sec before reading */
-
+/* ***********************************************************************  */
+/*                                DHT11 Sensor                              */
+/* ***********************************************************************  */
+void hum_moist_sensor( void )
+{
   moistureVal = analogRead( analogMsPin );  /* Read the analog in value */
   //Serial.print("moisture value  = " );                       
   //Serial.println(moistureVal);
@@ -106,9 +113,22 @@ void loop() {
   miosture = ( double )moistureVal / 1024;    
   miosture = miosture * 100;
 
-  Serial.print("Moisture  = " );
-  Serial.print( miosture );
-  Serial.print(" % - ");                       
+  if ( miosture < MOISTURE_MIN ) {
+    lcd.setCursor( 0, 0 );
+    lcd.print("Please Water Now !!");
+  } else {
+    lcd.setCursor( 0, 0 );
+    lcd.print("Hello, World LG!");
+  }
+
+  lcd.setCursor( 0, 2 );
+  lcd.print("Moisture (%) = ");
+  lcd.print( miosture );
+
+#ifdef DEBUG
+  Serial.print("Moisture (%)  = " );
+  Serial.print( miosture );                      
+#endif
 
    /* Reading temperature or humidity takes about 250 milliseconds! */
    /* Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor) */
@@ -117,15 +137,25 @@ void loop() {
   float t = dht.readTemperature();  /* Read temperature as Celsius (the default) */
   float f = dht.readTemperature( true ); /* Read temperature as Fahrenheit (isFahrenheit = true) */
 
+
   /* Check if any reads failed and exit early (to try again). */
   if (isnan(h) || isnan(t) || isnan(f)) {
+#ifdef DEBUG
     Serial.println( "Failed to read from DHT sensor!" );
+#endif
+
+    lcd.setCursor( 0, 0 );
+    lcd.print("Failed to read from DHT sensor! ");
     return;
   } 
 
   float hif = dht.computeHeatIndex(f, h); /* Compute heat index in Fahrenheit (the default) */
   float hic = dht.computeHeatIndex(t, h, false); /* Compute heat index in Celsius (isFahreheit = false) */
 
+  lcd.setCursor( 0, 3 );
+  lcd.print("Humidity (%) = ");
+  lcd.print( h );
+#ifdef DEBUG
   Serial.print("Humidity: ");
   Serial.print(h);
   Serial.print(" % - ");
@@ -139,4 +169,36 @@ void loop() {
   Serial.print(" *C ");
   Serial.print(hif);
   Serial.println(" *F");
+#endif
+}
+
+void blink_led( void )
+{
+  digitalWrite( LED_BUILTIN, HIGH );   
+  delay( 1000 );
+  digitalWrite(LED_BUILTIN, LOW); 
+}
+
+void loop( void ) 
+{
+  blink_led();
+
+  tmp_sensor();
+
+  delay( 2000 ); /*  DHT11 Sensor needs 2 sec before reading */
+
+  hum_moist_sensor();
+
+  blink_led();
+
+  if ( counter >= 5 ) {
+
+  lcd.off();
+  /* ATmega328P, ATmega168 */
+  //LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
+  LowPower.powerDown( SLEEP_FOREVER, ADC_OFF, BOD_OFF );
+
+  } else {
+    counter++;
+  }
 }
