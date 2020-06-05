@@ -26,6 +26,10 @@ LiquidCrystal_I2C lcd( LCD_I2C_ADDRESS, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 #define DHTTYPE DHT11   // DHT 11
 DHT dht( DHTPIN, DHTTYPE );
 
+#define TEMP_MIN      4
+#define TEMP_MAX      40
+#define MOISTURE_MIN  20
+
 const int analogInPin = A0;  // Analog input pin that the TMP36-1 sensor is attached to
 int sensorValue       = 0;   
 double temp           = 0;
@@ -99,6 +103,14 @@ void tmp_sensor( void )
   lcd.setCursor( 0, 1 );
   lcd.print("Temp (C) = ");
   lcd.print(temp);
+
+  if ( temp < TEMP_MIN ) {
+    lcd.setCursor( 0, 0 );
+    lcd.print("** TOO COLD **");
+  } else if ( temp > TEMP_MAX ) {
+    lcd.setCursor( 0, 0 );
+    lcd.print("** TOO HOT **");
+  }
 }
 
 /* ***********************************************************************  */
@@ -115,10 +127,7 @@ void hum_moist_sensor( void )
 
   if ( miosture < MOISTURE_MIN ) {
     lcd.setCursor( 0, 0 );
-    lcd.print("Please Water Now !!");
-  } else {
-    lcd.setCursor( 0, 0 );
-    lcd.print("Hello, World LG!");
+    lcd.print("** Please Water Now **");
   }
 
   lcd.setCursor( 0, 2 );
@@ -191,14 +200,13 @@ void loop( void )
 
   blink_led();
 
-  if ( counter >= 5 ) {
-
-  lcd.off();
-  /* ATmega328P, ATmega168 */
-  //LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
-  LowPower.powerDown( SLEEP_FOREVER, ADC_OFF, BOD_OFF );
-
-  } else {
+  if ( counter < 10 ) {
     counter++;
+  } else {
+    lcd.off();
+    
+    /* ATmega328P, ATmega168 */
+    LowPower.powerDown( SLEEP_FOREVER, ADC_OFF, BOD_OFF );
+    //LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
   }
 }
